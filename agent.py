@@ -12,6 +12,11 @@ def get_hotel_price(city: str):
     prices = {"london": "£250", "paris": "£300", "tokyo": "£150", "kochi": "£50"}
     return prices.get(city.lower(), "Price data not found.")
 
+def get_weather(city: str):
+    print(f"\n[SYSTEM LOG: Checking weather for {city}...]")
+    weather = {"london": "Rainy, 12°C", "paris": "Sunny, 20°C", "tokyo": "Cloudy, 18°C", "kochi": "Humid, 32°C"}
+    return weather.get(city.lower(), "Weather data not found.")
+
 # 2. The Tool Definition (The menu we hand to the LLM)
 tools = [
     {
@@ -19,6 +24,23 @@ tools = [
         "function": {
             "name": "get_hotel_price",
             "description": "Get the current nightly hotel room price for a given city.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "city": {
+                        "type": "string",
+                        "description": "The name of the city, e.g., London, Tokyo, Kochi",
+                    }
+                },
+                "required": ["city"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Get the temperature for a given city.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -64,21 +86,25 @@ while True:
         
         # 3. Loop through the tools the LLM wants to call
         for tool_call in response_message.tool_calls:
+            import json
+            args = json.loads(tool_call.function.arguments)
+            city_name = args.get("city")
+            
+            tool_output = "" # Create a generic variable to hold the answer
+            
+            # Route to the correct tool!
             if tool_call.function.name == "get_hotel_price":
-                import json
-                args = json.loads(tool_call.function.arguments)
+                tool_output = get_hotel_price(city_name)
+            elif tool_call.function.name == "get_weather":
+                tool_output = get_weather(city_name)
                 
-                # Here is your code!
-                city_name = args.get("city")
-                price_result = get_hotel_price(city_name)
-                
-                # 4. Pass the result BACK to the LLM's memory
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "name": tool_call.function.name,
-                    "content": str(price_result)
-                })
+            # 4. Pass the result BACK to the LLM's memory
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "name": tool_call.function.name,
+                "content": str(tool_output) # Send whatever the tool_output was
+            })
         
         # 5. Make a SECOND API call now that the LLM has the database info
         second_completion = client.chat.completions.create(
